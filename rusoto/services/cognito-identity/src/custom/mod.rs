@@ -15,7 +15,8 @@ use rusoto_core::{
 use rusoto_core::credential::{
     AwsCredentials, 
     CredentialsError,
-    ProvideAwsCredentials
+    ProvideAwsCredentials,
+    StaticProvider
 };
 
 use crate::generated::{
@@ -102,7 +103,11 @@ impl CognitoProvider {
     }
 
     fn credentials_from_cognito(&self) -> Result<RusotoFuture<GetCredentialsForIdentityResponse, GetCredentialsForIdentityError>, CredentialsError> {
-        let client = CognitoIdentityClient::new(self.region.clone());
+        let client = CognitoIdentityClient::new_with(
+            rusoto_core::request::HttpClient::new().map_err(|e| CredentialsError::new(format!("{:?}", e)))?,
+            StaticProvider::from(AwsCredentials::default()),
+            self.region.clone()
+        );
         let input = GetCredentialsForIdentityInput {
             identity_id: self.identity_id.clone(),
             logins: self.logins.clone(),
