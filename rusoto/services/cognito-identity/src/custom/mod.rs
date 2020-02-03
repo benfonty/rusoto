@@ -161,10 +161,7 @@ impl Future for CognitoProviderFuture {
                     },
                     Err(err) => {
                         println!("err");
-                        Err(CredentialsError::new(format!(
-                        "StsProvider get_session_token error: {:?}",
-                        err
-                    )))
+                        Err(CredentialsError::new(format!("{:?}",err)))
                 },
                 }
             },
