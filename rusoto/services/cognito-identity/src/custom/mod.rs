@@ -40,19 +40,7 @@ use std::collections::HashMap;
 /// # Example TODO
 ///
 /// ```rust
-/// extern crate rusoto_credential;
-///
-/// use std::time::Duration;
-///
-/// use rusoto_credential::ContainerProvider;
-///
-/// fn main() {
-///   let mut provider = ContainerProvider::new();
-///   // you can overwrite the default timeout like this:
-///   provider.set_timeout(Duration::from_secs(60));
-///
-///   // ...
-/// }
+/// 
 /// ```
 #[derive(Debug, Clone)]
 pub struct CognitoProvider {
@@ -69,29 +57,29 @@ pub struct CognitoProviderBuilder {
 }
 
 impl CognitoProviderBuilder {
-    pub fn build(&self) -> CognitoProvider { // TODO: builder should consume self
+    pub fn build(self) -> CognitoProvider { 
         CognitoProvider {
-            identity_id: self.identity_id.clone().expect("no identity id provided"),
-            region: self.region.clone().unwrap_or(Region::default()),
-            logins: self.logins.clone()
+            identity_id: self.identity_id.expect("no identity id provided"),
+            region: self.region.unwrap_or(Region::default()),
+            logins: self.logins
         }
     }
 
-    pub fn identity_id(&mut self, identity_id: &str)-> &mut Self {
-        self.identity_id = Some(identity_id.into());
+    pub fn identity_id(mut self, identity_id: String)-> Self {
+        self.identity_id = Some(identity_id);
         self
     }
 
-    pub fn region(&mut self, region: &Region)-> &mut Self {
-        self.region = Some(region.clone());
+    pub fn region(mut self, region: Region)-> Self {
+        self.region = Some(region);
         self
     }
 
-    pub fn login(&mut self, provider: &str, token: &str)-> &mut Self {
+    pub fn login(mut self, provider: String, token: String)-> Self {
         if self.logins == None {
             self.logins = Some(HashMap::new());
         }
-        self.logins.as_mut().unwrap().insert(provider.into(), token.into());
+        self.logins.as_mut().unwrap().insert(provider, token);
         self
     }
 }
@@ -185,6 +173,70 @@ impl ProvideAwsCredentials for CognitoProvider {
             Err(e) => CognitoProviderFutureInner::Result(Err(e)),
         };
         CognitoProviderFuture { inner }
+    }
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+        
+    #[test]
+    #[should_panic(expected = "no identity id provided")]
+    fn builder_empty() {
+        CognitoProvider::builder().build();
+    }
+
+    #[test]
+    #[should_panic(expected = "no identity id provided")]
+    fn builder_no_identity_id() {
+        CognitoProvider::builder()
+        .login("provider".to_string(), "token".to_string())
+        .build();
+    }
+
+    #[test]
+    fn builder_simple() {
+        let provider = CognitoProvider::builder().identity_id("id_id".to_string()).build();
+        assert_eq!(provider.identity_id, "id_id");
+        assert_eq!(provider.region, Region::default());
+        assert_eq!(provider.logins, None);
+    }
+
+    #[test]
+    fn builder_complete() {
+        let provider = CognitoProvider::builder()
+            .identity_id("id_id".to_string())
+            .region(Region::EuCentral1)
+            .login("provider".to_string(), "token".to_string())
+            .build();
+        assert_eq!(provider.identity_id, "id_id");
+        assert_eq!(provider.region, Region::EuCentral1);
+        assert!(provider.logins.is_some());
+        let logins = provider.logins.unwrap();
+        assert_eq!(logins.len(), 1);
+        assert!(logins.get("provider").is_some());
+        assert_eq!(logins.get("provider").unwrap(), "token");
+    }
+
+    #[test]
+    fn builder_two_providers() {
+        let provider = CognitoProvider::builder()
+            .identity_id("id_id".to_string())
+            .region(Region::EuCentral1)
+            .login("provider1".to_string(), "token1".to_string())
+            .login("provider2".to_string(), "token2".to_string())
+            .build();
+        assert_eq!(provider.identity_id, "id_id");
+        assert_eq!(provider.region, Region::EuCentral1);
+        assert!(provider.logins.is_some());
+        let logins = provider.logins.unwrap();
+        assert_eq!(logins.len(), 2);
+        assert!(logins.get("provider1").is_some());
+        assert_eq!(logins.get("provider1").unwrap(), "token1");
+        assert!(logins.get("provider2").is_some());
+        assert_eq!(logins.get("provider2").unwrap(), "token2");
     }
 }
 
