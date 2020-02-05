@@ -37,19 +37,35 @@ use std::collections::HashMap;
 
 /// Provides AWS credentials from aws Cognito.
 ///
-/// # Example TODO
+/// For further information about Cognito Identities check https://docs.aws.amazon.com/cognito/index.html
+///
+/// # Example
 ///
 /// ```rust
+/// use rusoto_core::Region;
+/// use rusoto_cognito_identity::CognitoProvider;
+/// let provider = CognitoProvider::builder()
+///     .identity_id("IDENTITY_POOL_ID".to_string())
+///     .region(Region::EuCentral1)
+///     .login("graph.facebook.com".to_string(), "FBTOKEN".to_string())
+///     .build();
 /// 
 /// ```
+
+/// <p>The Cognito credential provider.</p>
 #[derive(Debug, Clone)]
 pub struct CognitoProvider {
+    /// <p>A unique identifier in the format REGION:GUID.</p>
     identity_id: String,
+    /// <p>The region of the identity pool.</p>
     region: Region,
+    /// <p>A set of optional name-value pairs that map provider names to provider tokens. The name-value pair will follow the syntax "provider_name": "provider_user_identifier".</p> <p>Logins should not be specified when trying to get credentials for an unauthenticated identity.</p> <p>The Logins parameter is required when using identities associated with external identity providers such as FaceBook. For examples of <code>Logins</code> maps, see the code examples in the <a href="http://docs.aws.amazon.com/cognito/latest/developerguide/external-identity-providers.html">External Identity Providers</a> section of the Amazon Cognito Developer Guide.</p>
     logins: Option<HashMap<String, String>>,
+    /// <p>The Amazon Resource Name (ARN) of the role to be assumed when multiple roles were received in the token from the identity provider. For example, a SAML-based identity provider. This parameter is optional for identity providers that do not support role customization.</p>
     custom_role_arn: Option<String>
 }
 
+/// <p>A builder for the Cognito credential provider.</p>
 #[derive(Default)]
 pub struct CognitoProviderBuilder {
     identity_id: Option<String>,
@@ -59,6 +75,7 @@ pub struct CognitoProviderBuilder {
 }
 
 impl CognitoProviderBuilder {
+    /// <p>Build the provider.</p>
     pub fn build(self) -> CognitoProvider { 
         CognitoProvider {
             identity_id: self.identity_id.expect("no identity id provided"),
@@ -68,21 +85,25 @@ impl CognitoProviderBuilder {
         }
     }
 
+    /// <p>Set the identity id.</p>
     pub fn identity_id(mut self, identity_id: String)-> Self {
         self.identity_id = Some(identity_id);
         self
     }
 
+    /// <p>Set the region.</p>
     pub fn region(mut self, region: Region)-> Self {
         self.region = Some(region);
         self
     }
 
+    /// <p>Set the custom role arn.</p>
     pub fn custom_role_arn(mut self, arn: String)-> Self {
         self.custom_role_arn = Some(arn);
         self
     }
 
+    /// <p>Add a pair provider/token.</p>
     pub fn login(mut self, provider: String, token: String)-> Self {
         if self.logins == None {
             self.logins = Some(HashMap::new());
@@ -93,7 +114,7 @@ impl CognitoProviderBuilder {
 }
 
 impl CognitoProvider {
-
+    /// Get a builder.
     pub fn builder() -> CognitoProviderBuilder {
         CognitoProviderBuilder::default()
     }
@@ -121,7 +142,8 @@ pub struct CognitoProviderFuture {
 }
 
 enum CognitoProviderFutureInner {
-    Result(Result<GetCredentialsForIdentityResponse, CredentialsError>),
+    /// This is used when there is an error before sending the call to Cognito
+    Error(CredentialsError),
     Future(RusotoFuture<GetCredentialsForIdentityResponse, GetCredentialsForIdentityError>),
 }
 
@@ -130,24 +152,14 @@ impl Future for CognitoProviderFuture {
     type Error = CredentialsError;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        println!("poll");
         match self.inner {
-            CognitoProviderFutureInner::Result(ref mut result) => {
-               match result {
-                   Err(err) => Err(CredentialsError::new(format!(
-                        "StsProvider get_session_token error: {:?}",
-                        err
-                    ))),
-                    Ok(_) => panic!("not possible")
-               }
+            CognitoProviderFutureInner::Error(ref mut error) => {
+                Err(CredentialsError::new(format!("{:?}",error)))
             },
             CognitoProviderFutureInner::Future(ref mut future) => {
-                println!("toto");
                 match future.poll() {
                     Ok(Async::Ready(resp)) => {
-                        println!("tot");
                         let creds = resp.credentials.ok_or(CredentialsError::new("no credentials were found in the response"))?;
-        
                         Ok(Async::Ready(
                             AwsCredentials::new(
                                 creds.access_key_id.ok_or(CredentialsError::new("no access key id was found in the response"))?, 
@@ -158,11 +170,9 @@ impl Future for CognitoProviderFuture {
                         ))
                     },
                     Ok(Async::NotReady) => {
-                        println!("tota");
                         Ok(Async::NotReady)
                     },
                     Err(err) => {
-                        println!("err");
                         Err(CredentialsError::new(format!("{:?}",err)))
                 },
                 }
@@ -176,16 +186,13 @@ impl ProvideAwsCredentials for CognitoProvider {
     type Future = CognitoProviderFuture;
 
     fn credentials(&self) -> Self::Future {
-        println!("call to credentuials");
         let inner = match self.credentials_from_cognito() {
             Ok(future) => CognitoProviderFutureInner::Future(future),
-            Err(e) => CognitoProviderFutureInner::Result(Err(e)),
+            Err(e) => CognitoProviderFutureInner::Error(e),
         };
         CognitoProviderFuture { inner }
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
