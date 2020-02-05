@@ -46,14 +46,16 @@ use std::collections::HashMap;
 pub struct CognitoProvider {
     identity_id: String,
     region: Region,
-    logins: Option<HashMap<String, String>>
+    logins: Option<HashMap<String, String>>,
+    custom_role_arn: Option<String>
 }
 
 #[derive(Default)]
 pub struct CognitoProviderBuilder {
     identity_id: Option<String>,
     region: Option<Region>,
-    logins: Option<HashMap<String, String>>
+    logins: Option<HashMap<String, String>>,
+    custom_role_arn: Option<String>
 }
 
 impl CognitoProviderBuilder {
@@ -61,7 +63,8 @@ impl CognitoProviderBuilder {
         CognitoProvider {
             identity_id: self.identity_id.expect("no identity id provided"),
             region: self.region.unwrap_or(Region::default()),
-            logins: self.logins
+            logins: self.logins,
+            custom_role_arn: self.custom_role_arn
         }
     }
 
@@ -72,6 +75,11 @@ impl CognitoProviderBuilder {
 
     pub fn region(mut self, region: Region)-> Self {
         self.region = Some(region);
+        self
+    }
+
+    pub fn custom_role_arn(mut self, arn: String)-> Self {
+        self.custom_role_arn = Some(arn);
         self
     }
 
@@ -99,6 +107,7 @@ impl CognitoProvider {
         let input = GetCredentialsForIdentityInput {
             identity_id: self.identity_id.clone(),
             logins: self.logins.clone(),
+            custom_role_arn: self.custom_role_arn.clone(),
             ..Default::default()
         };
         
@@ -202,6 +211,7 @@ mod tests {
         assert_eq!(provider.identity_id, "id_id");
         assert_eq!(provider.region, Region::default());
         assert_eq!(provider.logins, None);
+        assert_eq!(provider.custom_role_arn, None);
     }
 
     #[test]
@@ -210,9 +220,12 @@ mod tests {
             .identity_id("id_id".to_string())
             .region(Region::EuCentral1)
             .login("provider".to_string(), "token".to_string())
+            .custom_role_arn("arn".to_string())
             .build();
         assert_eq!(provider.identity_id, "id_id");
         assert_eq!(provider.region, Region::EuCentral1);
+        assert!(provider.custom_role_arn.is_some());
+        assert_eq!(provider.custom_role_arn.unwrap(), "arn");
         assert!(provider.logins.is_some());
         let logins = provider.logins.unwrap();
         assert_eq!(logins.len(), 1);
@@ -237,6 +250,7 @@ mod tests {
         assert_eq!(logins.get("provider1").unwrap(), "token1");
         assert!(logins.get("provider2").is_some());
         assert_eq!(logins.get("provider2").unwrap(), "token2");
+        assert_eq!(provider.custom_role_arn, None);
     }
 }
 
